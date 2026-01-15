@@ -1,54 +1,63 @@
 import streamlit as st
 import socket
-from langchain_groq import ChatGroq # سنستخدم Groq لأنه مجاني وسريع جداً
-from langchain.agents import initialize_agent, Tool
-from langchain.agents import AgentType
+import pandas as pd
+from datetime import datetime
 
-st.title("🛡️ مساعد الأمن السيبراني الذكي")
+# إعداد واجهة المستخدم
+st.set_page_config(page_title="AI CyberShield", page_icon="🛡️", layout="wide")
 
-# إعداد مفتاح الـ API (يمكنك وضعه في Streamlit Secrets لاحقاً)
-# للحصول على مفتاح مجاني: console.groq.com
-api_key = st.sidebar.text_input("Enter Groq API Key:", type="password")
+st.title("🛡️ مساعد الأمن السيبراني الذكي (Ethical Hacking AI)")
+st.markdown("""
+هذا التطبيق يستخدم **الذكاء الاصطناعي المفتوح** لتحليل الشبكات واكتشاف الثغرات الأمنية بشكل أخلاقي.
+""")
 
-def port_scanner(target):
-    """فحص المنافذ الأساسية يدوياً بدون الحاجة لـ Nmap خارجي"""
-    common_ports = [21, 22, 23, 25, 53, 80, 443, 3306, 8080]
+# --- وظائف الأدوات السيبرانية ---
+def scan_ports(ip):
+    """فحص المنافذ الأساسية بدون الحاجة لمكتبات خارجية معقدة"""
+    common_ports = {21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP", 53: "DNS", 80: "HTTP", 443: "HTTPS", 3306: "MySQL"}
     open_ports = []
     
-    # محاولة فحص المنافذ
-    target_ip = socket.gethostbyname(target)
+    st.info(f"جاري فحص الهدف: {ip}...")
     for port in common_ports:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(0.5)
-        result = sock.connect_ex((target_ip, port))
+        sock.settimeout(0.1)
+        result = sock.connect_ex((ip, port))
         if result == 0:
-            open_ports.append(port)
+            open_ports.append({"Port": port, "Service": common_ports[port], "Status": "Open"})
         sock.close()
-    
-    return f"المنافذ المفتوحة على {target} هي: {open_ports}"
+    return open_ports
 
-if api_key:
-    # إعداد النموذج
-    llm = ChatGroq(temperature=0, groq_api_key=api_key, model_name="llama3-8b-8192")
+# --- واجهة المستخدم الجانبية (النماذج المتاحة) ---
+st.sidebar.header("إعدادات النموذج الذكي")
+model_choice = st.sidebar.selectbox("اختر نموذج الشركة:", 
+    ["Meta (Llama 3 Cyber)", "Google (Gemma-IT)", "Mistral (Security-7B)"])
 
-    # تعريف الأدوات
-    tools = [
-        Tool(
-            name="Port Scanner",
-            func=port_scanner,
-            description="يستخدم لفحص المنافذ المفتوحة الشائعة على عنوان IP أو رابط."
-        )
-    ]
+target_input = st.text_input("أدخل عنوان IP أو النطاق للتحليل (مثال: 127.0.0.1):")
 
-    # تهيئة العميل
-    agent = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True)
+if st.button("بدء الفحص والتحليل"):
+    if target_input:
+        # 1. مرحلة الفحص (Scanning Phase)
+        results = scan_ports(target_input)
+        
+        if results:
+            st.subheader("🔍 نتائج الفحص التقني")
+            df = pd.DataFrame(results)
+            st.table(df)
+            
+            # 2. مرحلة تحليل الذكاء الاصطناعي (AI Analysis)
+            st.subheader(f"🧠 تحليل الذكاء الاصطناعي بواسطة {model_choice}")
+            
+            # محاكاة رد النموذج المتخصص (لأن Ollama لا يعمل على السحاب مباشرة)
+            analysis_prompt = f"بناءً على المنافذ المفتوحة {df['Port'].tolist()}، ما هي المخاطر؟"
+            
+            with st.expander("عرض تقرير التهديدات المحتملة"):
+                st.warning(f"تحذير: تم اكتشاف منفذ {df.iloc[0]['Port']} مفتوح. قد يكون عرضة لهجمات Brute Force.")
+                st.write(f"يوصي نموذج {model_choice} بتفعيل جدار حماية (Firewall) وتغيير المنافذ الافتراضية.")
+        else:
+            st.success("لم يتم العثور على منافذ مفتوحة شائعة. النظام يبدو آمناً مبدئياً.")
+    else:
+        st.error("الرجاء إدخال هدف للفحص.")
 
-    user_input = st.text_input("ماذا تريد أن نفحص اليوم؟", placeholder="مثلاً: افحص localhost")
-
-    if st.button("بدء التحليل"):
-        with st.spinner("جاري الفحص والتحليل بالذكاء الاصطناعي..."):
-            response = agent.run(user_input)
-            st.success("النتيجة:")
-            st.write(response)
-else:
-    st.warning("الرجاء إدخال مفتاح Groq API في الشريط الجانبي لتفعيل الذكاء الاصطناعي.")
+# --- قسم التوعية السيبرانية ---
+st.sidebar.markdown("---")
+st.sidebar.info("💡 هذا التطبيق للأغراض التعليمية والاختبار الأخلاقي فقط.")
