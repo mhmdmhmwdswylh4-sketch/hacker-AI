@@ -1,3 +1,4 @@
+streamlit
 langchain
 langchain-community
-python-nmap
+langchain-groq
