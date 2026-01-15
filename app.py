@@ -1,54 +1,54 @@
-import nmap
-from langchain_community.llms import Ollama
+import streamlit as st
+import socket
+from langchain_groq import ChatGroq # سنستخدم Groq لأنه مجاني وسريع جداً
 from langchain.agents import initialize_agent, Tool
 from langchain.agents import AgentType
 
-# --- الأدوات الذكية ---
+st.title("🛡️ مساعد الأمن السيبراني الذكي")
 
-def advanced_scanner(target):
-    """يقوم بفحص الخدمات وإصداراتها لمحاولة توقع الثغرات"""
-    nm = nmap.PortScanner()
-    # -sV لمحاولة معرفة إصدار الخدمة (Version Detection)
-    nm.scan(target, arguments='-sV --version-intensity 5')
+# إعداد مفتاح الـ API (يمكنك وضعه في Streamlit Secrets لاحقاً)
+# للحصول على مفتاح مجاني: console.groq.com
+api_key = st.sidebar.text_input("Enter Groq API Key:", type="password")
+
+def port_scanner(target):
+    """فحص المنافذ الأساسية يدوياً بدون الحاجة لـ Nmap خارجي"""
+    common_ports = [21, 22, 23, 25, 53, 80, 443, 3306, 8080]
+    open_ports = []
     
-    scan_results = []
-    for host in nm.all_hosts():
-        for proto in nm[host].all_protocols():
-            ports = nm[host][proto].keys()
-            for port in ports:
-                service = nm[host][proto][port]
-                info = f"Port: {port}, Service: {service['name']}, Version: {service['version']}"
-                scan_results.append(info)
+    # محاولة فحص المنافذ
+    target_ip = socket.gethostbyname(target)
+    for port in common_ports:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.5)
+        result = sock.connect_ex((target_ip, port))
+        if result == 0:
+            open_ports.append(port)
+        sock.close()
     
-    return "\n".join(scan_results) if scan_results else "لم يتم العثور على خدمات مفتوحة."
+    return f"المنافذ المفتوحة على {target} هي: {open_ports}"
 
-# --- إعداد النماذج (متعددة الخيارات) ---
-# يمكنك تغيير النموذج بناءً على ما قمت بتحميله في Ollama
-# Meta: llama3 | Mistral: mistral | Google: gemma
-llm = Ollama(model="llama3", temperature=0.1) # temperature منخفضة لضمان دقة التحليل التقني
+if api_key:
+    # إعداد النموذج
+    llm = ChatGroq(temperature=0, groq_api_key=api_key, model_name="llama3-8b-8192")
 
-tools = [
-    Tool(
-        name="Advanced Service Scanner",
-        func=advanced_scanner,
-        description="استخدم هذه الأداة للحصول على الخدمات وإصداراتها من الهدف."
-    )
-]
+    # تعريف الأدوات
+    tools = [
+        Tool(
+            name="Port Scanner",
+            func=port_scanner,
+            description="يستخدم لفحص المنافذ المفتوحة الشائعة على عنوان IP أو رابط."
+        )
+    ]
 
-# --- تهيئة الوكيل السيبراني ---
-cyber_agent = initialize_agent(
-    tools, 
-    llm, 
-    agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, 
-    verbose=True,
-    handle_parsing_errors=True
-)
+    # تهيئة العميل
+    agent = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True)
 
-# --- تجربة عملية ---
-prompt = """
-قم بفحص الهدف 127.0.0.1. 
-بناءً على الخدمات المكتشفة وإصداراتها، اقترح ثغرات محتملة (CVEs) 
-وقدم نصائح أمنية لغلق هذه الثغرات.
-"""
+    user_input = st.text_input("ماذا تريد أن نفحص اليوم؟", placeholder="مثلاً: افحص localhost")
 
-# print(cyber_agent.run(prompt))
+    if st.button("بدء التحليل"):
+        with st.spinner("جاري الفحص والتحليل بالذكاء الاصطناعي..."):
+            response = agent.run(user_input)
+            st.success("النتيجة:")
+            st.write(response)
+else:
+    st.warning("الرجاء إدخال مفتاح Groq API في الشريط الجانبي لتفعيل الذكاء الاصطناعي.")
